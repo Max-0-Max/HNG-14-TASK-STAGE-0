@@ -5,14 +5,15 @@ const cors = require("cors");
 const app = express();
 app.use(cors({ origin: "*" }));
 app.set("trust proxy", true);
+app.set("strict routing", false);
 
 app.get("/", (req, res) => {
   res.send("Gender API is running 🚀");
 });
 
-app.get("/api/classify", async (req, res) => {
+app.get(["/api/classify", "/api/classify/"], async (req, res) => {
   try {
-    // Explicitly check if 'name' key exists in query
+    // Check if 'name' key exists at all
     if (!("name" in req.query)) {
       return res.status(400).json({
         status: "error",
@@ -21,10 +22,9 @@ app.get("/api/classify", async (req, res) => {
     }
 
     let name = req.query.name;
-
-    // Explicitly cast and trim
     name = String(name).trim();
 
+    // Check for empty, "undefined", or "null" strings
     if (name === "" || name === "undefined" || name === "null") {
       return res.status(400).json({
         status: "error",
@@ -35,6 +35,7 @@ app.get("/api/classify", async (req, res) => {
     // Sanitize against path leaking
     name = name.split("?")[0].split("/")[0].trim();
 
+    // Re-check after sanitizing
     if (name === "") {
       return res.status(400).json({
         status: "error",
@@ -48,7 +49,6 @@ app.get("/api/classify", async (req, res) => {
 
     const { gender, probability, count } = response.data;
 
-    // Nonsense/unknown names: gender is null from genderize
     const isUnknown = gender === null || gender === undefined;
     const safeProb = probability ?? 0;
     const safeCount = count ?? 0;
