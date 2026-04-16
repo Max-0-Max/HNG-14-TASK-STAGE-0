@@ -3,41 +3,28 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors({ origin: "*" }));
 
 app.get("/", (req, res) => {
   res.send("Gender API is running 🚀");
 });
 
-function validateName(name) {
-  if (name === undefined) {
-    return { valid: false, code: 400, message: "Missing name parameter" };
-  }
-
-  if (typeof name !== "string") {
-    return { valid: false, code: 422, message: "Name must be a string" };
-  }
-
-  if (name.trim() === "") {
-    return { valid: false, code: 400, message: "Name cannot be empty" };
-  }
-
-  return { valid: true };
-}
-
 app.get("/api/classify", async (req, res) => {
   try {
     const { name } = req.query;
 
-    const validation = validateName(name);
-    if (!validation.valid) {
-      return res.status(validation.code).json({
+    if (name === undefined || name.trim() === "") {
+      return res.status(400).json({
         status: "error",
-        message: validation.message
+        message: "Missing name parameter"
+      });
+    }
+
+    if (typeof name !== "string") {
+      return res.status(422).json({
+        status: "error",
+        message: "Name must be a string"
       });
     }
 
@@ -47,7 +34,7 @@ app.get("/api/classify", async (req, res) => {
 
     const { gender, probability, count } = response.data;
 
-    if (!gender || count === 0) {
+    if (gender === null || count === 0) {
       return res.status(422).json({
         status: "error",
         message: "No prediction available for the provided name"
@@ -57,8 +44,6 @@ app.get("/api/classify", async (req, res) => {
     const sample_size = count;
     const is_confident = probability >= 0.7 && sample_size >= 100;
 
-    const processed_at = new Date().toISOString();
-
     return res.status(200).json({
       status: "success",
       data: {
@@ -67,7 +52,7 @@ app.get("/api/classify", async (req, res) => {
         probability,
         sample_size,
         is_confident,
-        processed_at
+        processed_at: new Date().toISOString()
       }
     });
 
@@ -79,12 +64,15 @@ app.get("/api/classify", async (req, res) => {
       });
     }
 
+    // ✅ Server failure
     return res.status(500).json({
       status: "error",
       message: "Internal server error"
     });
   }
 });
+
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
