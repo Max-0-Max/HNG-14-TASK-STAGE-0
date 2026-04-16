@@ -4,7 +4,7 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors({ origin: "*" }));
-app.set("trust proxy", true); // ← Fix for Railway proxy
+app.set("trust proxy", true);
 
 app.get("/", (req, res) => {
   res.send("Gender API is running 🚀");
@@ -12,18 +12,28 @@ app.get("/", (req, res) => {
 
 app.get("/api/classify", async (req, res) => {
   try {
-    let name = req.query.name;
-
-    // Handle missing or empty name
-    if (name === undefined || name === null) {
+    // Explicitly check if 'name' key exists in query
+    if (!("name" in req.query)) {
       return res.status(400).json({
         status: "error",
         message: "Missing name parameter"
       });
     }
 
-    // Sanitize: trim and take only the actual name (guard against path leaking)
+    let name = req.query.name;
+
+    // Explicitly cast and trim
     name = String(name).trim();
+
+    if (name === "" || name === "undefined" || name === "null") {
+      return res.status(400).json({
+        status: "error",
+        message: "Name cannot be empty"
+      });
+    }
+
+    // Sanitize against path leaking
+    name = name.split("?")[0].split("/")[0].trim();
 
     if (name === "") {
       return res.status(400).json({
@@ -32,23 +42,26 @@ app.get("/api/classify", async (req, res) => {
       });
     }
 
-    // Strip anything that looks like a path or extra query string
-    name = name.split("?")[0].split("/")[0];
-
     const response = await axios.get(
       `https://api.genderize.io?name=${encodeURIComponent(name)}`
     );
 
     const { gender, probability, count } = response.data;
 
+    // Nonsense/unknown names: gender is null from genderize
+    const isUnknown = gender === null || gender === undefined;
+    const safeProb = probability ?? 0;
+    const safeCount = count ?? 0;
+    const is_confident = !isUnknown && safeProb >= 0.9 && safeCount >= 100;
+
     return res.status(200).json({
       status: "success",
       data: {
         name: name.toLowerCase(),
-        gender: gender ?? "unknown",
-        probability: probability ?? 0,
-        sample_size: count ?? 0,
-        is_confident: (probability ?? 0) >= 0.9 && (count ?? 0) >= 100,
+        gender: isUnknown ? "unknown" : gender,
+        probability: safeProb,
+        sample_size: safeCount,
+        is_confident,
         processed_at: new Date().toISOString()
       }
     });
