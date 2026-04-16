@@ -9,6 +9,10 @@ app.use(cors({
   origin: "*"
 }));
 
+app.get("/", (req, res) => {
+  res.send("Gender API is running 🚀");
+});
+
 function validateName(name) {
   if (name === undefined) {
     return { valid: false, code: 400, message: "Missing name parameter" };
