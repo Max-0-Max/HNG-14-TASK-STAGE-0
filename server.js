@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors({ origin: "*" }));
+app.set("trust proxy", true); // ← Fix for Railway proxy
 
 app.get("/", (req, res) => {
   res.send("Gender API is running 🚀");
@@ -11,27 +12,39 @@ app.get("/", (req, res) => {
 
 app.get("/api/classify", async (req, res) => {
   try {
-    const { name } = req.query;
+    let name = req.query.name;
 
-    // Only reject if name is completely missing
-    if (name === undefined || name.trim() === "") {
+    // Handle missing or empty name
+    if (name === undefined || name === null) {
       return res.status(400).json({
         status: "error",
         message: "Missing name parameter"
       });
     }
 
+    // Sanitize: trim and take only the actual name (guard against path leaking)
+    name = String(name).trim();
+
+    if (name === "") {
+      return res.status(400).json({
+        status: "error",
+        message: "Name cannot be empty"
+      });
+    }
+
+    // Strip anything that looks like a path or extra query string
+    name = name.split("?")[0].split("/")[0];
+
     const response = await axios.get(
-      `https://api.genderize.io?name=${encodeURIComponent(name.trim())}`
+      `https://api.genderize.io?name=${encodeURIComponent(name)}`
     );
 
     const { gender, probability, count } = response.data;
 
-    // Always return 200 with data — even if gender is null/unknown
     return res.status(200).json({
       status: "success",
       data: {
-        name: name.trim().toLowerCase(),
+        name: name.toLowerCase(),
         gender: gender ?? "unknown",
         probability: probability ?? 0,
         sample_size: count ?? 0,
